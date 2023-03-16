@@ -1,0 +1,9 @@
+web3
+requests
+lightning
+lnd_grpc
+protobuf
+py_ecc
+sh
+bolt11
+configparser 

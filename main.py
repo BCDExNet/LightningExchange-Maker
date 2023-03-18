@@ -101,8 +101,8 @@ async def fetch_old_events():
 
             start_block = to_block + 1
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
-        except (ConnectionError, BlockNotFound):
-            logging.error("Failed to fetch events, retrying in 5 seconds")
+        except BaseException as e:
+            logging.error("Failed to fetch events, retrying in 5 seconds\n{e}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 
@@ -124,8 +124,8 @@ async def fetch_events():
                 save_last_block_number(last_block_number)
                 logging.info(f"Successfully fetched events up to block {last_block_number}")
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
-        except (ConnectionError, BlockNotFound):
-            logging.error("Failed to fetch events, retrying in 5 seconds")
+        except BaseException as e:
+            logging.error("Failed to fetch events, retrying in 5 seconds\n{e}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 

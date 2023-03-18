@@ -10,29 +10,56 @@ import shutil
 import requests
 import codecs
 import grpc
-import lnd_grpc
 import base64
 import configparser
 from coingeco_oracle import get_relative_price
 from bolt11.core import decode
-import bolt11
+import lightning_pb2 as lnrpc, lightning_pb2_grpc as lightningstub
+import router_pb2 as routerrpc, router_pb2_grpc as routerstub
 
-# import lightning_pb2 as lnrpc
-# , lightning_pb2_grpc as lightningstub
-# from lnd_grpc import rpc_pb2_grpc as lnrpc
+def load_config():
+    try:
+        # Load config from JSON file
+        with open("config.json", "r") as config_file:
+            return json.load(config_file)
+    except Exception as e:
+        errormsg = traceback.format_exc()
+        logging.error(f"Failed to load config.json: {str(e)}\n{errormsg}")
+        return None
 
-# Load config from JSON file
-with open("config.json", "r") as config_file:
-    config = json.load(config_file)
+config = load_config()
 
-# Set up connection to Ethereum node
-w3 = Web3(Web3.HTTPProvider(config["provider"]))
-w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-
-# Verify connection
-if not w3.isConnected():
-    print("Not connected to Ethereum node")
+if config is None:
+    logging.error("Unable to load config. Exiting.")
     exit()
+
+def setup_web3_connection():
+    try:
+        # Set up connection to Ethereum node
+        w3 = Web3(Web3.HTTPProvider(config["provider"]))
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+        # Verify connection
+        if not w3.isConnected():
+            logging.error("Not connected to Ethereum node. Exiting.")
+            exit()
+
+        return w3
+    except Exception as e:
+        errormsg = traceback.format_exc()
+        logging.error(f"Failed to set up web3 connection: {str(e)}\n{errormsg}")
+        return None
+
+w3 = setup_web3_connection()
+if w3 is None:
+    logging.error("Unable to set up web3 connection. Exiting.")
+    exit()
+
+
+# Simplify error handling with a wrapper function
+def move_event_on_error(error_message, event):
+    logging.error(error_message)
+    move_event(event, 'error_events')
 
 # Your event handling function
 def handle_DepositCreated(event):
@@ -50,132 +77,136 @@ def handle_DepositCreated(event):
     logging.info(f"Event received: DepositCreated, secretHash: {secret_hash}, depositor: {depositor}, beneficiary: {beneficiary}, token: {token}, amount: {amount}, deadline: {deadline}, invoice: {invoice}")
 
     if beneficiary.lower() != maker_wallet_address.lower():
-        logging.error("The beneficiary does not match the maker wallet address.")
+        move_event_on_error("The beneficiary does not match the maker wallet address.", event)
         return True
 
-    supported_assets = config['support_accests']
-    token_name = None
-    token_decimals = None
-    for item in supported_assets:
-        for key, value in item.items():
-            if token.lower() == value.lower():
-                token_name = key
-                print(item)
-                break
-        if token_name != None:
-            token_decimals = item["decimals"]
-
-
-    if token_name == None:
-        logging.error("The TOKEN does not match the USDC contract address.")
+    token_info = get_token_info(token, config['supported_assets'])
+    if token_info is None:
+        move_event_on_error("The TOKEN does not match the USDC contract address.", event)
         return True
 
-    try:
-        oracle_price = get_relative_price("btc", token_name)
-        print("btc/usdc price", oracle_price)
-    except Exception as e:
-        errormsg = traceback.format_exc()
-        logging.error(f"Failed to get price from Chainlink: {str(e)}\n{errormsg}")
+    oracle_price = get_oracle_price("btc", token_info["name"])
+    if oracle_price is None:
         move_event(event, 'error_events')
         return False
 
+    invoice_info = get_invoice_info(invoice)
+    if invoice_info is None:
+        move_event(event, 'error_events')
+        return False
 
-    # Read the macaroon file and create the necessary metadata object
-    # with open(config['macaroon_path'], 'rb') as f:
-    #     macaroon_bytes = f.read()
-    #     macaroon = codecs.encode(macaroon_bytes, 'hex')
-    # auth_metadata_plugin = lnd_grpc.AuthMetadataPlugin(macaroon)
-    # auth_metadata_plugin = grpc.metadata_call_credentials(auth_metadata_plugin)
-    # channel_credentials = grpc.ssl_channel_credentials(open(config['tls_cert_path'], 'rb').read())
-    # composite_credentials = grpc.composite_channel_credentials(channel_credentials, auth_metadata_plugin)
-    # channel = grpc.secure_channel(config['ln_rpc_server'], composite_credentials)
+    event_btc_price = calculate_event_btc_price(amount, token_info["decimals"], invoice_info["amount"])
+    if not validate_event_btc_price(event_btc_price, oracle_price):
+        move_event_on_error("The BTC price in the event is lower than the Chainlink price by more than 1%.", event)
+        return False
 
-    # # Create a stub for the LND RPC
-    # stub = lnrpc.LightningStub(channel)
+    if not validate_secret_hash(secret_hash, invoice_info["payment_hash"]):
+        move_event_on_error("The secret hash from the event does not match the payment hash in the invoice.", event)
+        return False
 
+    if not validate_deadline(deadline):
+        move_event_on_error("The deadline in the event is less than 30 minutes from now.", event)
+        return False
 
+    if invoice_info.preimage:
+        secret = invoice_info.preimage
+        logging.info("Preimage already included in the invoice. Skipping payment.")
+    else:
+        secret = pay_invoice(invoice)
+
+    if secret is None:
+        move_event_on_error("Failed to pay invoice and get secret.", event)
+        return False
+
+    if not delegate_withdraw(secret, maker_wallet_address):
+        move_event_on_error("Failed to call delegateRefund.", event)
+        return False
+
+    return True
+
+def get_token_info(token, supported_assets):
+    for item in supported_assets:
+        if token.lower() == item["address"].lower():
+            return item
+    return None
+
+def get_oracle_price(base_asset, quote_asset):
     try:
-        decoded_invoice = bolt11.core.decode(invoice)
-        
-        print("invoice", "mainnet", decoded_invoice.is_mainnet())
-        print("invoice", "mainnet", decoded_invoice.timestamp)
-        print("invoice", "mainnet", decoded_invoice.expiry_time)
-        print("invoice", "mainnet", decoded_invoice.payment_hash)
-        print("invoice", "mainnet", decoded_invoice.amount)
-        print("invoice", "mainnet", decoded_invoice.description)
+        return get_relative_price(base_asset, quote_asset)
+    except Exception as e:
+        errormsg = traceback.format_exc()
+        logging.error(f"Failed to get price from Chainlink: {str(e)}\n{errormsg}")
+    return None
 
-        btc_amount = decoded_invoice.amount / 1e11
-        event_btc_price = amount / 10**token_decimals / btc_amount
-        print("order btc price", event_btc_price)
+def get_invoice_info(invoice):
+    try:
+        request = lnrpc.PayReqString(
+            pay_req=invoice,
+        )
+        return stub.DecodePayReq(request)
+
     except Exception as e:
         errormsg = traceback.format_exc()
         logging.error(f"Failed to decode invoice: {str(e)}\n{errormsg}")
         move_event(event, 'error_events')
         return False
 
+    # try:
+    #     decoded_invoice = decode(invoice)
+    # return {
+    #     "is_mainnet": decoded_invoice.is_mainnet(),
+    #     "timestamp": decoded_invoice.timestamp,
+    #     "expiry_time": decoded_invoice.expiry_time,
+    #     "payment_hash": decoded_invoice.payment_hash,
+    #     "amount": decoded_invoice.amount,
+    #     "description": decoded_invoice.description
+    # }
+    # except Exception as e:
+    #     errormsg = traceback.format_exc()
+    #     logging.error(f"Failed to decode invoice: {str(e)}\n{errormsg}")
+    return None
 
-    if event_btc_price < oracle_price * 0.99:
-        errormsg = traceback.format_exc()
-        logging.error("The BTC price in the event is lower than the Chainlink price by more than 1%.\n{errormsg}")
-        move_event(event, 'error_events')
-        return False
+def calculate_event_btc_price(amount, token_decimals, invoice_amount):
+    return amount / 10**token_decimals / (invoice_amount / 1e11)
 
-    if secret_hash != decoded_invoice.payment_hash:
-        errormsg = traceback.format_exc()
-        logging.error("The secret hash from the event does not match the payment hash in the invoice.\n{errormsg}")
-        move_event(event, 'error_events')
-        return False
+def validate_event_btc_price(event_btc_price, oracle_price):
+    return event_btc_price >= oracle_price * 0.99
 
-    if deadline < time.time() + 1800:
-        errormsg = traceback.format_exc()
-        logging.error("The deadline in the event is less than 30 minutes from now.\n{errormsg}")
-        move_event(event, 'error_events')
-        return False
+def validate_secret_hash(event_secret_hash, invoice_secret_hash):
+    return event_secret_hash == invoice_secret_hash
+
+def validate_deadline(deadline):
+    return deadline >= time.time() + 1800
+
+def pay_invoice(invoice):
+    # create macaroon credentials
+    macaroon = codecs.encode(open(config['lnd']['macaroon_path'], 'rb').read(), 'hex')
+
+def metadata_callback(context, callback):
+    callback([('macaroon', macaroon)], None)
+    auth_creds = grpc.metadata_call_credentials(metadata_callback)
+    # create SSL credentials
+    os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA'
+    cert = open(config['lnd']['tls_cert_path'], 'rb').read()
+    ssl_creds = grpc.ssl_channel_credentials(cert)
+    # combine macaroon and SSL credentials
+    combined_creds = grpc.composite_channel_credentials(ssl_creds, auth_creds)
+    # make the request
+    channel = grpc.secure_channel(config['lnd']['ln_rpc_server'], combined_creds)
+    stub = lightningstub.LightningStub(channel)
+    rtstub = routerstub.RouterStub(channel)
 
     try:
-        secret = pay_invoice_and_get_secret(stub, invoice)
+        response = stub.SendPaymentSync(lnrpc.SendRequest(payment_request=invoice))
+        result = ""
+        for response in rtstub.TrackPaymentV2(routerrpc.TrackPaymentRequest(payment_hash=response.payment_hash)):
+            secret = response.payment_preimage
+
+        return "0x" + secret.hex()
     except Exception as e:
         errormsg = traceback.format_exc()
         logging.error(f"Failed to pay invoice and get secret: {str(e)}\n{errormsg}")
-        move_event(event, 'error_events')
-        return False
-    
-    try:
-        secret = "0x"+secret
-        delegate_withdraw(secret, maker_wallet_address)
-    except Exception as e:
-        errormsg = traceback.format_exc()
-        logging.error(f"Failed to call delegateRefund: {str(e)}\n{errormsg}")
-        move_event(event, 'error_events')
-        return False
-
-    return True
-
-
-def get_chainlink_btc_price(api_key):
-    url = f"https://api.chain.link/v1/pricefeeds/btc-usdc?api_key={api_key}"
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()["price"]
-
-
-def pay_invoice_and_get_secret(stub, invoice):
-    # Pay the invoice
-    try:
-
-        response = stub.SendPaymentSync(ln.SendRequest(payment_request=invoice))
-        if response.payment_error:
-            print(f"Payment error: {response.payment_error}")
-            return None
-        else:
-            print(f"Payment successful! Payment preimage: {response.payment_preimage.hex()}")
-            return response.payment_preimage.hex()
-    except Exception as e:
-        print(f"Error while trying to pay invoice: {e}")
         return None
-
-
-
 
 def delegate_withdraw(secret, maker_wallet_address):
     global config
@@ -184,9 +215,8 @@ def delegate_withdraw(secret, maker_wallet_address):
     bot_private_key = config["maker_bot_privatekey"]
     contract_address = config["contract_address"]
     contract_abi = config["contract_abi"]
+    secret = "0x"+secret
 
-
-    # Initialize the contract instance
     contract_instance = w3.eth.contract(address=contract_address, abi=contract_abi)
 
     # Get the nonce for the transaction
@@ -212,10 +242,11 @@ def delegate_withdraw(secret, maker_wallet_address):
     transaction_receipt = w3.eth.waitForTransactionReceipt(transaction_hash)
 
     # Check if the transaction was successful
-    if transaction_receipt['status'] == 1:
-        return True
-    else:
-        return False
+    return transaction_receipt['status'] == 1
+
+def move_event_on_error(error_message, event):
+    logging.error(error_message)
+    move_event(event, 'error_events')
 
 def attribute_dict_to_dict(attribute_dict):
     result = {}
@@ -242,8 +273,6 @@ def save_event_to(event, target_folder):
         f.write(json.dumps(new_event))
 
     return new_event
-
-
 def move_event(event, target_folder):
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
@@ -254,13 +283,3 @@ def move_event(event, target_folder):
 
     shutil.move(src, dst)
     logging.info(f"Moved event file {event_id}.json from 'pending_events' to '{target_folder}'")
-
-# def process_pending_events(maker_wallet_address, chainlink_api_key):
-#     pending_events_folder = 'pending_events'
-#     if not os.path.exists(pending_events_folder):
-#         os.makedirs(pending_events_folder)
-
-#     for event_file in os.listdir(pending_events_folder):
-#         with open(os.path.join(pending_events_folder, event_file), 'r') as f:
-#             event = json.load(f)
-#         handle_DepositCreated(event, maker_wallet_address, chainlink_api_key)

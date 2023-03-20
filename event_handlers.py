@@ -108,10 +108,15 @@ def handle_DepositCreated(event):
         log_event_on_error("Can't to decode invoice.", event)
         return False
 
+    if invoice_info.num_satoshis > 50000:
+        log_event_on_error("The invoice amount over the max amount 50,000 sats.", event)
+        return False
+
     event_btc_price = calculate_event_btc_price(amount, token_info["decimals"], invoice_info.num_satoshis)
     if not validate_event_btc_price(event_btc_price, oracle_price):
         log_event_on_error("The BTC price in the event is lower than the Chainlink price by more than 1%.", event)
         return False
+    logging.info(f"Oracle price is {oracle_price}, Order price is {validate_event_btc_price}")
 
     if not validate_secret_hash(secret_hash, invoice_info.payment_hash):
         log_event_on_error("The secret hash from the event does not match the payment hash in the invoice.", event)
@@ -121,12 +126,7 @@ def handle_DepositCreated(event):
         log_event_on_error("The deadline in the event is less than 30 minutes from now.", event)
         return False
 
-    if hasattr(invoice_info, "preimage"):
-        secret = "0x" + invoice_info.preimage
-        logging.info("Preimage already included in the invoice. Skipping payment.")
-    else:
-        secret = pay_invoice(invoice)
-
+    secret = pay_invoice(invoice)
     if secret is None:
         log_event_on_error("Failed to pay invoice and get secret.", event)
         return False
@@ -170,7 +170,7 @@ def calculate_event_btc_price(amount, token_decimals, invoice_amount):
     return amount / 10**token_decimals / (invoice_amount / 1e8)
 
 def validate_event_btc_price(event_btc_price, oracle_price):
-    return event_btc_price >= oracle_price * 0.99
+    return event_btc_price >= oracle_price
 
 def validate_secret_hash(event_secret_hash, invoice_secret_hash):
     return event_secret_hash == invoice_secret_hash
@@ -184,7 +184,6 @@ def pay_invoice(invoice):
         result = ""
         for response in rtstub.TrackPaymentV2(routerrpc.TrackPaymentRequest(payment_hash=response.payment_hash)):
             secret = response.payment_preimage
-        print("Pay invoice successed, secret is ", secret)
         return "0x" + str(secret)
     except Exception as e:
         errormsg = traceback.format_exc()

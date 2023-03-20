@@ -56,6 +56,19 @@ if w3 is None:
     exit()
 
 
+macaroon = codecs.encode(open(config['lnd']['macaroon_path'], 'rb').read(), 'hex')
+def metadata_callback(context, callback):
+    callback([('macaroon', macaroon)], None)
+auth_creds = grpc.metadata_call_credentials(metadata_callback)
+os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA'
+cert = open(config['lnd']['tls_cert_path'], 'rb').read()
+ssl_creds = grpc.ssl_channel_credentials(cert)
+combined_creds = grpc.composite_channel_credentials(ssl_creds, auth_creds)
+channel = grpc.secure_channel(config['lnd']['ln_rpc_server'], combined_creds)
+stub = lightningstub.LightningStub(channel)
+rtstub = routerstub.RouterStub(channel)
+
+
 # Simplify error handling with a wrapper function
 def move_event_on_error(error_message, event):
     logging.error(error_message)
@@ -77,12 +90,12 @@ def handle_DepositCreated(event):
     logging.info(f"Event received: DepositCreated, secretHash: {secret_hash}, depositor: {depositor}, beneficiary: {beneficiary}, token: {token}, amount: {amount}, deadline: {deadline}, invoice: {invoice}")
 
     if beneficiary.lower() != maker_wallet_address.lower():
-        move_event_on_error("The beneficiary does not match the maker wallet address.", event)
+        log_event_on_error("The beneficiary does not match the maker wallet address.", event)
         return True
 
     token_info = get_token_info(token, config['supported_assets'])
     if token_info is None:
-        move_event_on_error("The TOKEN does not match the USDC contract address.", event)
+        log_event_on_error("The TOKEN does not match the USDC contract address.", event)
         return True
 
     oracle_price = get_oracle_price("btc", token_info["name"])
@@ -97,15 +110,15 @@ def handle_DepositCreated(event):
 
     event_btc_price = calculate_event_btc_price(amount, token_info["decimals"], invoice_info["amount"])
     if not validate_event_btc_price(event_btc_price, oracle_price):
-        move_event_on_error("The BTC price in the event is lower than the Chainlink price by more than 1%.", event)
+        log_event_on_error("The BTC price in the event is lower than the Chainlink price by more than 1%.", event)
         return False
 
     if not validate_secret_hash(secret_hash, invoice_info["payment_hash"]):
-        move_event_on_error("The secret hash from the event does not match the payment hash in the invoice.", event)
+        log_event_on_error("The secret hash from the event does not match the payment hash in the invoice.", event)
         return False
 
     if not validate_deadline(deadline):
-        move_event_on_error("The deadline in the event is less than 30 minutes from now.", event)
+        log_event_on_error("The deadline in the event is less than 30 minutes from now.", event)
         return False
 
     if invoice_info.preimage:
@@ -115,11 +128,11 @@ def handle_DepositCreated(event):
         secret = pay_invoice(invoice)
 
     if secret is None:
-        move_event_on_error("Failed to pay invoice and get secret.", event)
+        log_event_on_error("Failed to pay invoice and get secret.", event)
         return False
 
     if not delegate_withdraw(secret, maker_wallet_address):
-        move_event_on_error("Failed to call delegateRefund.", event)
+        log_event_on_error("Failed to call delegateRefund.", event)
         return False
 
     return True
@@ -179,23 +192,6 @@ def validate_deadline(deadline):
     return deadline >= time.time() + 1800
 
 def pay_invoice(invoice):
-    # create macaroon credentials
-    macaroon = codecs.encode(open(config['lnd']['macaroon_path'], 'rb').read(), 'hex')
-
-def metadata_callback(context, callback):
-    callback([('macaroon', macaroon)], None)
-    auth_creds = grpc.metadata_call_credentials(metadata_callback)
-    # create SSL credentials
-    os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA'
-    cert = open(config['lnd']['tls_cert_path'], 'rb').read()
-    ssl_creds = grpc.ssl_channel_credentials(cert)
-    # combine macaroon and SSL credentials
-    combined_creds = grpc.composite_channel_credentials(ssl_creds, auth_creds)
-    # make the request
-    channel = grpc.secure_channel(config['lnd']['ln_rpc_server'], combined_creds)
-    stub = lightningstub.LightningStub(channel)
-    rtstub = routerstub.RouterStub(channel)
-
     try:
         response = stub.SendPaymentSync(lnrpc.SendRequest(payment_request=invoice))
         result = ""
@@ -244,9 +240,8 @@ def delegate_withdraw(secret, maker_wallet_address):
     # Check if the transaction was successful
     return transaction_receipt['status'] == 1
 
-def move_event_on_error(error_message, event):
+def log_event_on_error(error_message, event):
     logging.error(error_message)
-    move_event(event, 'error_events')
 
 def attribute_dict_to_dict(attribute_dict):
     result = {}

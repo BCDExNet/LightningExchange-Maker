@@ -79,7 +79,10 @@ async def fetch_old_events():
         try:
             # Get the latest block number
             latest_block = w3.eth.blockNumber
-            # Check if there are enough blocks to process
+            
+            if start_block == 'latest':
+                start_block = latest_block - 10
+
             if latest_block - start_block >= block_chunk_size:
                 to_block = start_block + block_chunk_size
             else:
@@ -95,14 +98,11 @@ async def fetch_old_events():
                 save_last_block_number(start_block)
                 logging.info(f"Successfully fetched events up to block {start_block}")
 
-            # Exit the loop if there are no more blocks to process
-            if to_block == latest_block:
-                break
-
             start_block = to_block + 1
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
-        except BaseException as e:
-            logging.error("Failed to fetch events, retrying in 5 seconds\n{e}")
+        except Exception as e:
+            errormsg = traceback.format_exc()
+            logging.error(f"Failed to fetch events, retrying in 5 seconds\n{e}\n{errormsg}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 
@@ -124,7 +124,7 @@ async def fetch_events():
                 save_last_block_number(last_block_number)
                 logging.info(f"Successfully fetched events up to block {last_block_number}")
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
-        except BaseException as e:
+        except Exception as e:
             logging.error("Failed to fetch events, retrying in 5 seconds\n{e}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
@@ -139,6 +139,8 @@ async def process_events():
             success = event_handler(event)
             if success:
                 event_handlers.move_event(event, 'completed_events')
+            else
+                event_handlers.move_event(event, 'error_events')
         else:
             logging.info("Event queue is empty, waiting for 1 second")
             await asyncio.sleep(1)  # Wait for 1 second if the queue is empty
@@ -146,7 +148,7 @@ async def process_events():
 async def main():
     check_pending_events()
     tasks = [
-            asyncio.create_task(fetch_events()),
+            asyncio.create_task(fetch_old_events()),
             asyncio.create_task(process_events())
         ]
     await asyncio.gather(*tasks)

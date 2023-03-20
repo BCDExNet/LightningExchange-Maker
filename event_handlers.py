@@ -225,7 +225,9 @@ def delegate_withdraw(secret, maker_wallet_address):
     return transaction_receipt['status'] == 1
 
 def log_event_on_error(error_message, event):
-    logging.error(error_message)
+    new_event = attribute_dict_to_dict(event)
+    event_id = new_event["args"]["secretHash"]
+    logging.error(f"[{event_id}] : {error_message}")
 
 def attribute_dict_to_dict(attribute_dict):
     result = {}

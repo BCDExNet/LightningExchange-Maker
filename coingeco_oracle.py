@@ -17,11 +17,10 @@ def fetch_prices():
     response.raise_for_status()
     prices_data = response.json()
 
-    # Extract prices for ETH, BTC, and USDC
     extracted_prices = {}
     for price_data in prices_data:
         symbol = price_data["symbol"].upper()
-        if symbol in {"ETH", "BTC", "USDC"}:
+        if symbol in {"ETH", "BTC", "USDC", "BUSD"}:
             extracted_prices[symbol] = float(price_data["current_price"])
 
     cache["timestamp"] = time.time()
@@ -30,7 +29,7 @@ def fetch_prices():
     return extracted_prices
 
 def get_relative_price(token1, token2):
-    if token1.upper() not in {"ETH", "BTC", "USDC"} or token2.upper() not in {"ETH", "BTC", "USDC"}:
+    if token1.upper() not in {"ETH", "BTC", "USDC", "BUSD"} or token2.upper() not in {"ETH", "BTC", "USDC", "BUSD"}:
         raise ValueError("Invalid token symbol")
 
     prices = fetch_prices()

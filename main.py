@@ -8,8 +8,8 @@ from web3.middleware import geth_poa_middleware
 from web3.exceptions import BlockNotFound
 import os
 import shutil
+import traceback
 
-# Import event handling functions
 import event_handlers
 
 # Load config from JSON file

@@ -132,18 +132,21 @@ async def fetch_events():
 
 async def process_events():
     while True:
-        if not event_queue.empty():
-            event = event_queue.get()
-            # Dynamically call the event handler function
-            event_handler = getattr(event_handlers, f"handle_{config['event_name']}")
-            success = event_handler(event)
-            if success:
-                event_handlers.move_event(event, 'completed_events')
+        try:
+            if not event_queue.empty():
+                event = event_queue.get()
+                event_handler = getattr(event_handlers, f"handle_{config['event_name']}")
+                success = event_handler(event)
+                if success:
+                    event_handlers.move_event(event, 'completed_events')
+                else:
+                    event_handlers.move_event(event, 'error_events')
             else:
-                event_handlers.move_event(event, 'error_events')
-        else:
-            logging.info("Event queue is empty, waiting for 1 second")
-            await asyncio.sleep(1)  # Wait for 1 second if the queue is empty
+                logging.info("Event queue is empty, waiting for 1 second")
+                await asyncio.sleep(1)
+        except Exception as e:
+            logging.error("Failed to process events, retrying in 5 seconds\n{e}")
+            await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 async def main():
     check_pending_events()

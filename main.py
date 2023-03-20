@@ -139,7 +139,7 @@ async def process_events():
             success = event_handler(event)
             if success:
                 event_handlers.move_event(event, 'completed_events')
-            else
+            else:
                 event_handlers.move_event(event, 'error_events')
         else:
             logging.info("Event queue is empty, waiting for 1 second")

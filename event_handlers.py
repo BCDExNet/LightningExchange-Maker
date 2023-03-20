@@ -241,6 +241,13 @@ def attribute_dict_to_dict(attribute_dict):
             result[key] = value
     return result
 
+def check_event_exists(event, target_folder):
+    new_event = attribute_dict_to_dict(event)
+    event_id = new_event["args"]["secretHash"]
+    file_name = os.path.join(target_folder, f"{event_id}.json")
+
+    return os.path.exists(file_name)
+
 def save_event_to(event, target_folder):
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)

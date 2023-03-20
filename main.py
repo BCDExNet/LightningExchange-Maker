@@ -102,7 +102,7 @@ async def fetch_old_events():
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
         except Exception as e:
             errormsg = traceback.format_exc()
-            logging.error(f"Failed to fetch events, retrying in 5 seconds\n{e}\n{errormsg}")
+            logging.error(f"Failed to fetch events, retrying in 5 seconds\n{str(e)}\n{errormsg}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 
@@ -135,6 +135,9 @@ async def process_events():
         try:
             if not event_queue.empty():
                 event = event_queue.get()
+                if event_handlers.check_event_exists(event, 'completed_events'):
+                    continue
+
                 event_handler = getattr(event_handlers, f"handle_{config['event_name']}")
                 success = event_handler(event)
                 if success:
@@ -145,7 +148,8 @@ async def process_events():
                 logging.info("Event queue is empty, waiting for 1 second")
                 await asyncio.sleep(1)
         except Exception as e:
-            logging.error("Failed to process events, retrying in 5 seconds\n{e}")
+            errormsg = traceback.format_exc()
+            logging.error("Failed to process events, retrying in 5 seconds\n{str(e)}\n{errormsg}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 async def main():

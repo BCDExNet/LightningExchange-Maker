@@ -113,10 +113,10 @@ def handle_DepositCreated(event):
         return False
 
     event_btc_price = calculate_event_btc_price(amount, token_info["decimals"], invoice_info.num_satoshis)
-    if not validate_event_btc_price(event_btc_price, oracle_price):
-        log_event_on_error("The BTC price in the event is lower than the Chainlink price by more than 1%.", event)
-        return False
     logging.info(f"Oracle price is {oracle_price}, Order price is {validate_event_btc_price}")
+    if not validate_event_btc_price(event_btc_price, oracle_price):
+        log_event_on_error("The BTC price in the event is lower than the Chainlink price.", event)
+        return False
 
     if not validate_secret_hash(secret_hash, invoice_info.payment_hash):
         log_event_on_error("The secret hash from the event does not match the payment hash in the invoice.", event)

@@ -1,5 +1,7 @@
 import requests
 import time
+import traceback
+import json
 
 cache = {}
 cache_timeout = 60  # Cache timeout in seconds

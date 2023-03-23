@@ -48,7 +48,7 @@ def fetch_prices():
     return extracted_prices
 
 def get_supported_tokens():
-    tokens = []
+    tokens = ["BTC"]
     for item in config['supported_assets']:
         tokens.append(item["name"].upper())
     return tokens

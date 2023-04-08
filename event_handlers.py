@@ -224,22 +224,22 @@ def delegate_withdraw(secret, maker_wallet_address, isNative):
     nonce = w3.eth.get_transaction_count(bot_address)
 
     # Estimate the gas limit
-    gas_limit = int(contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).estimateGas() * 1.3)
+    gas_limit = int(contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).estimate_gas() * 1.3)
 
     # Build the transaction dictionary
-    transaction = contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).buildTransaction({
+    transaction = contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).build_transaction({
         'gas': gas_limit,
-        'gasPrice': w3.eth.gasPrice,
+        'gasPrice': w3.eth.gas_price,
         'nonce': nonce
     })
-
+    # transaction = contract_instance.encodeABI(fn_name="delegateWithdraw", args=[secret, maker_wallet_address])
     # Sign the transaction
     signed_transaction = w3.eth.account.sign_transaction(transaction, bot_private_key)
 
     # Send the transaction
     transaction_hash = w3.eth.send_raw_transaction(signed_transaction.rawTransaction)
 
-    logging.info(f"sending withdraw transaction {transaction_hash}")
+    logging.info(f"sending withdraw transaction {transaction_hash.hex()}")
 
     # Wait for the transaction receipt
     transaction_receipt = w3.eth.wait_for_transaction_receipt(transaction_hash)

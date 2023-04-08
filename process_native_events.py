@@ -97,9 +97,12 @@ async def fetch_old_events():
             new_entries = w3.eth.get_logs({'fromBlock': start_block, 'toBlock': to_block, 'address': config["native_contract_address"]})
             event_abi = contract.events[config["event_name"]]._get_event_abi()
             for evt in new_entries:
-                event = get_event_data(w3.codec, event_abi, evt)
-                converted_event = event_handlers.save_event_to(event, 'pending_events')
-                event_queue.put(converted_event)
+                try :
+                    event = get_event_data(w3.codec, event_abi, evt)
+                    converted_event = event_handlers.save_event_to(event, 'pending_events')
+                    event_queue.put(converted_event)
+                except Exception as e:
+                    pass
             if new_entries:
                 start_block = new_entries[-1]["blockNumber"]
                 save_last_block_number(start_block)

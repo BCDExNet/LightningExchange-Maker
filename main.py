@@ -7,6 +7,8 @@ from web3 import Web3
 from web3.auto import w3
 from web3.middleware import geth_poa_middleware
 from web3.exceptions import BlockNotFound
+from web3._utils.filters import construct_event_filter_params
+from web3._utils.events import get_event_data
 import os
 import shutil
 import traceback
@@ -22,7 +24,7 @@ w3 = Web3(Web3.HTTPProvider(config["provider"]))
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
 # Verify connection
-if not w3.isConnected():
+if not w3.is_connected():
     print("Not connected to Ethereum node")
     exit()
 
@@ -92,13 +94,16 @@ async def fetch_old_events():
             else:
                 to_block = latest_block
             logging.info(f"Fetching events from {start_block} to {to_block}")
-            
+
             new_entries = w3.eth.get_logs({'fromBlock': start_block, 'toBlock': to_block, 'address': config["native_contract_address"]})
             event_abi = contract.events[config["event_name"]]._get_event_abi()
             for evt in new_entries:
-                event = get_event_data(w3.codec, event_abi, evt)
-                converted_event = event_handlers.save_event_to(event, 'pending_events')
-                event_queue.put(converted_event)
+                try :
+                    event = get_event_data(w3.codec, event_abi, evt)
+                    converted_event = event_handlers.save_event_to(event, 'pending_events')
+                    event_queue.put(converted_event)
+                except Exception as e:
+                    pass
             if new_entries:
                 start_block = new_entries[-1]["blockNumber"]
                 save_last_block_number(start_block)

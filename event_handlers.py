@@ -196,6 +196,8 @@ def pay_invoice(invoice):
         result = ""
         for response in rtstub.TrackPaymentV2(routerrpc.TrackPaymentRequest(payment_hash=response.payment_hash)):
             secret = response.payment_preimage
+            logging.info(f"{response.payment_hash}")
+        
         return "0x" + str(secret)
     except Exception as e:
         errormsg = traceback.format_exc()
@@ -219,10 +221,10 @@ def delegate_withdraw(secret, maker_wallet_address, isNative):
     contract_instance = w3.eth.contract(address=contract_address, abi=token_contract_abi)
 
     # Get the nonce for the transaction
-    nonce = w3.eth.getTransactionCount(bot_address)
+    nonce = w3.eth.get_transaction_count(bot_address)
 
     # Estimate the gas limit
-    gas_limit = contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).estimateGas()
+    gas_limit = int(contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).estimateGas() * 1.3)
 
     # Build the transaction dictionary
     transaction = contract_instance.functions.delegateWithdraw(secret, maker_wallet_address).buildTransaction({
@@ -232,13 +234,15 @@ def delegate_withdraw(secret, maker_wallet_address, isNative):
     })
 
     # Sign the transaction
-    signed_transaction = w3.eth.account.signTransaction(transaction, bot_private_key)
+    signed_transaction = w3.eth.account.sign_transaction(transaction, bot_private_key)
 
     # Send the transaction
-    transaction_hash = w3.eth.sendRawTransaction(signed_transaction.rawTransaction)
+    transaction_hash = w3.eth.send_raw_transaction(signed_transaction.rawTransaction)
+
+    logging.info(f"sending withdraw transaction {transaction_hash}")
 
     # Wait for the transaction receipt
-    transaction_receipt = w3.eth.waitForTransactionReceipt(transaction_hash)
+    transaction_receipt = w3.eth.wait_for_transaction_receipt(transaction_hash)
 
     # Check if the transaction was successful
     return transaction_receipt['status'] == 1

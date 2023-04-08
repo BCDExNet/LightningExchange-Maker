@@ -1,12 +1,13 @@
 import asyncio
 import json
 import logging
-import logging.handlers
 from queue import Queue
 from web3 import Web3
 from web3.auto import w3
 from web3.middleware import geth_poa_middleware
 from web3.exceptions import BlockNotFound
+from web3._utils.filters import construct_event_filter_params
+from web3._utils.events import get_event_data
 import os
 import shutil
 import traceback
@@ -22,15 +23,15 @@ w3 = Web3(Web3.HTTPProvider(config["provider"]))
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
 # Verify connection
-if not w3.isConnected():
+if not w3.is_connected():
     print("Not connected to Ethereum node")
     exit()
 
 # Initialize contract object
-with open(config["token_contract_abi"], "r") as abi_file:
+with open(config["native_contract_abi"], "r") as abi_file:
     token_contract_abi = json.load(abi_file)
 contract = w3.eth.contract(
-    address=w3.to_checksum_address(config["token_contract_address"]), 
+    address=w3.to_checksum_address(config["native_contract_address"]), 
     abi=token_contract_abi
 )
 
@@ -92,7 +93,7 @@ async def fetch_old_events():
             else:
                 to_block = latest_block
             logging.info(f"Fetching events from {start_block} to {to_block}")
-            
+
             new_entries = w3.eth.get_logs({'fromBlock': start_block, 'toBlock': to_block, 'address': config["native_contract_address"]})
             event_abi = contract.events[config["event_name"]]._get_event_abi()
             for evt in new_entries:
@@ -131,7 +132,7 @@ async def fetch_events():
                 logging.info(f"Successfully fetched events up to block {last_block_number}")
             await asyncio.sleep(check_interval)  # Fetch new events every 5 seconds
         except Exception as e:
-            logging.error(f"Failed to fetch events, retrying in 5 seconds\n{e}")
+            logging.error("Failed to fetch events, retrying in 5 seconds\n{e}")
             await asyncio.sleep(check_interval)  # Retry after 5 seconds in case of errors
 
 

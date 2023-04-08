@@ -40,7 +40,7 @@ def setup_web3_connection():
         w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
         # Verify connection
-        if not w3.isConnected():
+        if not w3.is_connected():
             logging.error("Not connected to Ethereum node. Exiting.")
             exit()
 
@@ -85,7 +85,10 @@ def handle_DepositCreated(event):
     amount = event["args"]["amount"]
     deadline = event["args"]["deadline"]
     invoice = event["args"]["invoice"]
+    contract_address = event["address"]
     maker_wallet_address = config['maker_wallet_address']
+
+    isNative = check_if_native_coin(contract_address)
 
     logging.info(f"Event received: DepositCreated, secretHash: {secret_hash}, depositor: {depositor}, beneficiary: {beneficiary}, token: {token}, amount: {amount}, deadline: {deadline}, invoice: {invoice}")
 
@@ -95,7 +98,7 @@ def handle_DepositCreated(event):
 
     token_info = get_token_info(token, config['supported_assets'])
     if token_info is None:
-        log_event_on_error("The TOKEN does not match the USDC contract address.", event)
+        log_event_on_error(f"Doesn't support this TOKEN {token}.", event)
         return True
 
     oracle_price = get_oracle_price("btc", token_info["name"])
@@ -131,11 +134,20 @@ def handle_DepositCreated(event):
         log_event_on_error("Failed to pay invoice and get secret.", event)
         return False
 
-    if not delegate_withdraw(secret, maker_wallet_address):
+    if not delegate_withdraw(secret, maker_wallet_address, isNative):
         log_event_on_error("Failed to call delegateRefund.", event)
         return False
 
     return True
+
+def check_if_native_coin(contract_address):
+    native_contract_address = config["native_contract_address"].lower()
+    token_contract_address = config["token_contract_address"].lower()
+    if contract_address.lower() == native_contract_address:
+        return True
+    if contract_address.lower() == token_contract_address:
+        return False
+    return None
 
 def get_token_info(token, supported_assets):
     for item in supported_assets:
@@ -190,14 +202,21 @@ def pay_invoice(invoice):
         logging.error(f"Failed to pay invoice and get secret: {str(e)}\n{errormsg}")
         return None
 
-def delegate_withdraw(secret, maker_wallet_address):
+def delegate_withdraw(secret, maker_wallet_address, isNative):
     global config
     bot_address = config["maker_bot_address"]
     bot_private_key = config["maker_bot_privatekey"]
-    contract_address = config["contract_address"]
-    contract_abi = config["contract_abi"]
+    contract_address = config["token_contract_address"]
+    contract_abi = config["token_contract_abi"]
 
-    contract_instance = w3.eth.contract(address=contract_address, abi=contract_abi)
+    if isNative:
+        contract_address = config["native_contract_address"]
+        contract_abi = config["native_contract_abi"]
+
+    with open(contract_abi, "r") as abi_file:
+        token_contract_abi = json.load(abi_file)
+
+    contract_instance = w3.eth.contract(address=contract_address, abi=token_contract_abi)
 
     # Get the nonce for the transaction
     nonce = w3.eth.getTransactionCount(bot_address)

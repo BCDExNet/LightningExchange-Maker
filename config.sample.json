@@ -1,21 +1,28 @@
 {
-    "provider": "",
-    "contract_address": "",
-    "contract_abi": [{"type":"event","name":"DepositCreated","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32","indexed":true},{"type":"address","name":"depositor","internalType":"address","indexed":true},{"type":"address","name":"beneficiary","internalType":"address","indexed":true},{"type":"address","name":"token","internalType":"address","indexed":false},{"type":"uint256","name":"amount","internalType":"uint256","indexed":false},{"type":"uint256","name":"deadline","internalType":"uint256","indexed":false},{"type":"string","name":"invoice","internalType":"string","indexed":false}],"anonymous":false},{"type":"event","name":"Refunded","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32","indexed":true},{"type":"address","name":"refundee","internalType":"address","indexed":true},{"type":"address","name":"token","internalType":"address","indexed":false},{"type":"uint256","name":"amount","internalType":"uint256","indexed":false}],"anonymous":false},{"type":"event","name":"Withdrawn","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32","indexed":true},{"type":"address","name":"withdrawer","internalType":"address","indexed":true},{"type":"address","name":"token","internalType":"address","indexed":false},{"type":"uint256","name":"amount","internalType":"uint256","indexed":false}],"anonymous":false},{"type":"function","stateMutability":"nonpayable","outputs":[],"name":"delegateRefund","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32"},{"type":"address","name":"depositor","internalType":"address"}]},{"type":"function","stateMutability":"nonpayable","outputs":[],"name":"delegateWithdraw","inputs":[{"type":"bytes","name":"secret","internalType":"bytes"},{"type":"address","name":"account","internalType":"address"}]},{"type":"function","stateMutability":"nonpayable","outputs":[],"name":"deposit","inputs":[{"type":"address","name":"token","internalType":"address"},{"type":"uint256","name":"amount","internalType":"uint256"},{"type":"address","name":"beneficiary","internalType":"address"},{"type":"bytes32","name":"secretHash","internalType":"bytes32"},{"type":"uint256","name":"deadline","internalType":"uint256"},{"type":"string","name":"invoice","internalType":"string"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"address","name":"depositor","internalType":"address"},{"type":"address","name":"beneficiary","internalType":"address"},{"type":"address","name":"token","internalType":"address"},{"type":"uint256","name":"amount","internalType":"uint256"},{"type":"uint256","name":"deadline","internalType":"uint256"},{"type":"bool","name":"withdrawn","internalType":"bool"},{"type":"string","name":"invoice","internalType":"string"}],"name":"getDeposit","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"bytes32","name":"","internalType":"bytes32"}],"name":"getDepositorHashByIndex","inputs":[{"type":"address","name":"depositor","internalType":"address"},{"type":"uint256","name":"index","internalType":"uint256"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"uint256","name":"","internalType":"uint256"}],"name":"getDepositorHashLength","inputs":[{"type":"address","name":"depositor","internalType":"address"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"bytes32[]","name":"","internalType":"bytes32[]"}],"name":"getDepositorHashs","inputs":[{"type":"address","name":"depositor","internalType":"address"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"bytes32","name":"","internalType":"bytes32"}],"name":"getWithdrawerHashByIndex","inputs":[{"type":"address","name":"withdrawer","internalType":"address"},{"type":"uint256","name":"index","internalType":"uint256"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"uint256","name":"","internalType":"uint256"}],"name":"getWithdrawerHashLength","inputs":[{"type":"address","name":"withdrawer","internalType":"address"}]},{"type":"function","stateMutability":"view","outputs":[{"type":"bytes32[]","name":"","internalType":"bytes32[]"}],"name":"getWithdrawerHashs","inputs":[{"type":"address","name":"withdrawer","internalType":"address"}]},{"type":"function","stateMutability":"nonpayable","outputs":[],"name":"refund","inputs":[{"type":"bytes32","name":"secretHash","internalType":"bytes32"}]},{"type":"function","stateMutability":"pure","outputs":[{"type":"bytes32","name":"","internalType":"bytes32"}],"name":"sha256Hash","inputs":[{"type":"bytes","name":"secret","internalType":"bytes"}]},{"type":"function","stateMutability":"nonpayable","outputs":[],"name":"withdraw","inputs":[{"type":"bytes","name":"secret","internalType":"bytes"}]}],
+    "provider": "https://bsc.getblock.io/6dfbe934-77bd-4af0-bef9-956e9e025392/mainnet/",
+    "token_contract_address": "0xd1a9559D4D54Ae11ad5ceBa1b309484502f4575d",
+    "native_contract_address": "0x316a4B704cbb793d16b7DF228805F49beeb040c5",
+    "token_contract_abi": "token_swap_contract_abi.json",
+    "native_contract_abi": "native_swap_contract_abi.json",
     "event_name": "DepositCreated",
     "lnd": {
-        "tls_cert_path": "/path/to/tls.cert",
-        "macaroon_path": "/path/to/admin.macaroon",
-        "ln_rpc_server": "127.0.0.1:10009",
+        "tls_cert_path": "",
+        "macaroon_path": "",
+        "ln_rpc_server": "",
         "network": "mainnet"
     },
     "maker_wallet_address": "",
     "maker_bot_address": "",
     "maker_bot_privatekey": "",
     "supported_assets":[
-        {"name": "usdc", "address":"0xa06be0f5950781ce28d965e5efc6996e88a8c141", "decimals": 6}
+            {"name": "usdc", "address":"0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", "decimals": 18},
+            {"name": "btcb", "address":"0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c", "decimals": 18},
+            {"name": "busd", "address":"0xe9e7cea3dedca5984780bafc599bd69add087d56", "decimals": 18},
+            {"name": "bnb", "address":"0x0000000000000000000000000000000000000000", "decimals": 18}
     ],
-    "asset_names": "bitcoin,ethereum,usd-coin,binance-usd,tether,binancecoin,wrapped-bitcoin",
+    "asset_names":[
+        "bitcoin,ethereum,usd-coin,binance-usd,tether,binancecoin,wrapped-bitcoin,elastos,rei-network,kucoin-shares,iotex,huobi-token,filda"
+    ],
     "email": {
         "smtp_server": "smtp.example.com",
         "smtp_port": 587,
@@ -23,5 +30,4 @@
         "sender_password": "your-password",
         "recipient_email": "recipient@example.com"
     }
-
 }

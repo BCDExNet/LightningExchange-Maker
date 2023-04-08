@@ -95,7 +95,7 @@ async def fetch_old_events():
                 to_block = latest_block
             logging.info(f"Fetching events from {start_block} to {to_block}")
 
-            new_entries = w3.eth.get_logs({'fromBlock': start_block, 'toBlock': to_block, 'address': config["native_contract_address"]})
+            new_entries = w3.eth.get_logs({'fromBlock': start_block, 'toBlock': to_block, 'address': config["token_contract_address"]})
             event_abi = contract.events[config["event_name"]]._get_event_abi()
             for evt in new_entries:
                 try :
